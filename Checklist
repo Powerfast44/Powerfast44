@@ -1,0 +1,251 @@
+import React, { useState, useEffect, useRef } from "react";
+
+// PowerFast Checklist - single-file React component (TailwindCSS)
+// Usage: render <PowerFastChecklistApp /> in your React app
+
+export default function PowerFastChecklistApp() {
+  const [company, setCompany] = useState({
+    name: "Power Fast",
+    legalName: "Power Fast Car Service Ltda",
+    cnpj: "49.584.943/0001-06",
+    founded: "13/02/2023",
+    phone: "(44) 99980-6733",
+    address: "Av. Francisco Jorge Nacle 44, Jardim Vitória, Cianorte - PR",
+    logo: "",
+  });
+
+  const defaultChecklist = {
+    id: null,
+    customerName: "",
+    customerPhone: "",
+    plate: "",
+    model: "",
+    mileage: "",
+    date: new Date().toISOString().slice(0, 10),
+    items: {
+      oilLevel: false,
+      brakes: false,
+      tires: false,
+      suspension: false,
+      battery: false,
+      lights: false,
+      airConditioning: false,
+      engineLeaks: false,
+      documentation: false,
+      testDrive: false,
+    },
+    notes: "",
+  };
+
+  const [form, setForm] = useState(defaultChecklist);
+  const [saved, setSaved] = useState([]);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    // load saved checklists
+    const s = localStorage.getItem("pf_checklists_v1");
+    if (s) setSaved(JSON.parse(s));
+    // load company info override if stored
+    const comp = localStorage.getItem("pf_company_v1");
+    if (comp) setCompany(JSON.parse(comp));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("pf_checklists_v1", JSON.stringify(saved));
+  }, [saved]);
+
+  useEffect(() => {
+    localStorage.setItem("pf_company_v1", JSON.stringify(company));
+  }, [company]);
+
+  function handleChange(e) {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+  }
+
+  function handleToggleItem(name) {
+    setForm((f) => ({ ...f, items: { ...f.items, [name]: !f.items[name] } }));
+  }
+
+  function saveForm() {
+    const copy = { ...form };
+    copy.id = form.id || Date.now();
+    const others = saved.filter((s) => s.id !== copy.id);
+    setSaved([copy, ...others]);
+    alert("Checklist salvo localmente.");
+    setForm(defaultChecklist);
+  }
+
+  function loadChecklist(id) {
+    const item = saved.find((s) => s.id === id);
+    if (item) setForm(item);
+  }
+
+  function deleteChecklist(id) {
+    if (!confirm("Excluir checklist?")) return;
+    setSaved((s) => s.filter((x) => x.id !== id));
+  }
+
+  function exportCSV() {
+    if (saved.length === 0) return alert("Nenhum checklist para exportar.");
+    const headers = [
+      "id",
+      "date",
+      "customerName",
+      "customerPhone",
+      "plate",
+      "model",
+      "mileage",
+      ...Object.keys(defaultChecklist.items),
+      "notes",
+    ];
+    const rows = saved.map((r) => {
+      return [
+        r.id,
+        r.date,
+        r.customerName,
+        r.customerPhone,
+        r.plate,
+        r.model,
+        r.mileage,
+        ...Object.keys(r.items).map((k) => (r.items[k] ? "1" : "0")),
+        '"' + (r.notes || "") + '"',
+      ].join(",");
+    });
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "powerfast_checklists_export.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function printChecklist(id) {
+    const item = saved.find((s) => s.id === id);
+    if (!item) return alert("Checklist não encontrado");
+    const w = window.open("", "_blank");
+    const html = `
+      <html>
+        <head>
+          <title>Checklist PowerFast - ${item.plate}</title>
+          <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px}</style>
+        </head>
+        <body>
+          <h1>${company.name} - Checklist</h1>
+          <p><strong>Cliente:</strong> ${item.customerName} - ${item.customerPhone}</p>
+          <p><strong>Veículo:</strong> ${item.model} - Placa: ${item.plate} - KM: ${item.mileage}</p>
+          <p><strong>Data:</strong> ${item.date}</p>
+          <h2>Itens</h2>
+          <ul>
+            ${Object.keys(item.items)
+              .map((k) => `<li>${k}: ${item.items[k] ? "OK" : "Não"}</li>`)
+              .join("")}
+          </ul>
+          <h3>Notas</h3>
+          <pre>${item.notes || ""}</pre>
+        </body>
+      </html>
+    `;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
+  function handleLogoUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setCompany((c) => ({ ...c, logo: ev.target.result }));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleCompanyChange(e) {
+    const { name, value } = e.target;
+    setCompany((c) => ({ ...c, [name]: value }));
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-5xl mx-auto bg-white shadow-md rounded-2xl p-6">
+        <header className="flex items-center gap-4">
+          <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+            {company.logo ? (
+              <img src={company.logo} alt="logo" className="object-contain w-full h-full" />
+            ) : (
+              <div className="text-center text-sm text-gray-600">Logo<br/>PowerFast</div>
+            )}
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">{company.name}</h1>
+            <p className="text-sm text-gray-600">{company.legalName} • CNPJ: {company.cnpj}</p>
+            <p className="text-sm">{company.address} • {company.phone}</p>
+            <p className="text-xs text-gray-500">Fundada em {company.founded}</p>
+          </div>
+          <div className="ml-auto flex flex-col gap-2">
+            <label className="text-xs">Upload logo</label>
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoUpload} />
+          </div>
+        </header>
+
+        <main className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <section className="md:col-span-2 bg-gray-50 p-4 rounded-lg">
+            <h2 className="font-semibold mb-2">Ficha de Entrada / Checklist</h2>
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input className="p-2 rounded border" name="customerName" placeholder="Nome do cliente" value={form.customerName} onChange={handleChange} />
+                <input className="p-2 rounded border" name="customerPhone" placeholder="Telefone" value={form.customerPhone} onChange={handleChange} />
+                <input className="p-2 rounded border" name="date" type="date" value={form.date} onChange={handleChange} />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input className="p-2 rounded border" name="plate" placeholder="Placa" value={form.plate} onChange={handleChange} />
+                <input className="p-2 rounded border" name="model" placeholder="Modelo" value={form.model} onChange={handleChange} />
+                <input className="p-2 rounded border" name="mileage" placeholder="KM" value={form.mileage} onChange={handleChange} />
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                {Object.keys(form.items).map((k) => (
+                  <label key={k} className="flex items-center gap-2 border p-2 rounded">
+                    <input type="checkbox" checked={form.items[k]} onChange={() => handleToggleItem(k)} />
+                    <span className="text-sm capitalize">{k.replace(/([A-Z])/g, ' $1')}</span>
+                  </label>
+                ))}
+              </div>
+
+              <textarea className="w-full p-2 border rounded" rows={4} name="notes" placeholder="Observações" value={form.notes} onChange={handleChange}></textarea>
+
+              <div className="flex gap-2">
+                <button onClick={saveForm} className="px-4 py-2 bg-blue-600 text-white rounded">Salvar checklist</button>
+                <button onClick={() => setForm(defaultChecklist)} className="px-4 py-2 border rounded">Limpar</button>
+              </div>
+            </div>
+          </section>
+
+          <aside className="bg-white p-4 rounded-lg border">
+            <h3 className="font-semibold">Painel - Checklists salvos</h3>
+            <div className="mt-3 space-y-2 max-h-96 overflow-auto">
+              {saved.length === 0 && <div className="text-sm text-gray-500">Nenhum checklist salvo.</div>}
+              {saved.map((s) => (
+                <div key={s.id} className="p-2 border rounded flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium">{s.plate || '---'} • {s.model || '---'}</div>
+                    <div className="text-xs text-gray-500">{s.customerName || 'Cliente'} • {s.date}</div>
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={() => loadChecklist(s.id)} className="px-2 py-1 text-xs border rounded">Editar</button>
+                    <button onClick={() => printChecklist(s.id)} className="px-2 py-1 text-xs border rounded">Imprimir</button>
+                    <button onClick={() => deleteChecklist(s.id)} className="px-2 py-1 text-xs border rounded">Excluir</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+              <button onClick={exportCSV} className="px-3 py-2 border rounded">Exportar CSV</button>
+              <button onClick={() => window.print()} className="px-3 py-2 border rounded">Imprimir Página</button>
+            </div>
